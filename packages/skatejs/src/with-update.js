@@ -114,6 +114,7 @@ export function prop(definition: PropType | void): Function {
           }
         }
         this._props[name] = coerce.call(this, val, name);
+        this._modifiedProps.add(name);
         this.triggerUpdate();
       }
     });
@@ -138,6 +139,7 @@ export const withUpdate = (Base: Class<any> = HTMLElement): Class<any> =>
     _prevState: Object;
     _props: Object;
     _state: Object;
+    _modifiedProps: Set;
     _syncingAttributeToProperty: null | string;
     _syncingPropertyToAttribute: boolean;
     _updating: boolean;
@@ -157,6 +159,7 @@ export const withUpdate = (Base: Class<any> = HTMLElement): Class<any> =>
     _prevState = {};
     _props = {};
     _state = {};
+    _modifiedProps = new Set();
 
     static get observedAttributes(): Array<string> {
       // We have to define props here because observedAttributes are retrieved
@@ -223,6 +226,7 @@ export const withUpdate = (Base: Class<any> = HTMLElement): Class<any> =>
             : newValue;
           this._props[propertyName] =
             propertyValue == null ? defaultValue.call(this) : propertyValue;
+          this._modifiedProps.add(propertyName);
           this.triggerUpdate();
         }
       }
@@ -241,6 +245,9 @@ export const withUpdate = (Base: Class<any> = HTMLElement): Class<any> =>
       if (super.connectedCallback) {
         super.connectedCallback();
       }
+      keys(this.constructor.props).forEach(prop => {
+        this._modifiedProps.add(prop);
+      });
       this.triggerUpdate();
     }
 
@@ -254,13 +261,17 @@ export const withUpdate = (Base: Class<any> = HTMLElement): Class<any> =>
       }
       this._updating = true;
       delay(() => {
-        const { _prevProps, _prevState } = this;
+        const { _prevProps, _prevState, _modifiedProps } = this;
         if (this.updating) {
-          this.updating(_prevProps, _prevState);
+          this.updating(_prevProps, _prevState, _modifiedProps);
         }
-        if (this.updated && this.shouldUpdate(_prevProps, _prevState)) {
-          this.updated(_prevProps, _prevState);
+        if (
+          this.updated &&
+          this.shouldUpdate(_prevProps, _prevState, _modifiedProps)
+        ) {
+          this.updated(_prevProps, _prevState, _modifiedProps);
         }
+        this._modifiedProps.clear();
         this._prevProps = this.props;
         this._prevState = this.state;
         this._updating = false;
